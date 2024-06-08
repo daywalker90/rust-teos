@@ -42,8 +42,7 @@ jobs:
               with:
                 name: unix-binaries
                 path: |
-                  "teos-${{github.ref_name}}-*.tar.gz"
-                  "watchtower-client-${{github.ref_name}}-*.tar.gz"
+                  *.tar.gz
 
             - name: Get rust version
               id: rversion
@@ -66,12 +65,12 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Get Changelog Entry
-              id: changelog_reader
-              uses: mindsers/changelog-reader-action@v2
-              with:
-                version: ${{ steps.tag_name.outputs.current_version }}
-                path: ./CHANGELOG.md
+            # - name: Get Changelog Entry
+            #   id: changelog_reader
+            #   uses: mindsers/changelog-reader-action@v2
+            #   with:
+            #     version: ${{ steps.tag_name.outputs.current_version }}
+            #     path: ./CHANGELOG.md
 
             - name: Download Artifacts
               uses: actions/download-artifact@v4
@@ -83,7 +82,7 @@ jobs:
               with:
                 allowUpdates: false
                 artifactErrorsFailBuild: true
-                body: "${{ steps.changelog_reader.outputs.changes }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
+                # body: "${{ steps.changelog_reader.outputs.changes }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
+                body: "### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
                 artifacts: |
-                  "teos-${{github.ref_name}}-*.tar.gz"
-                  "watchtower-client-${{github.ref_name}}-*.tar.gz"
+                  *.tar.gz
