@@ -27,9 +27,9 @@ jobs:
             - name: Build unix
               id: unix_build
               run: |
-                touch "watchtower-client-${{github.ref_name}}-aarch64-linux-gnu.tar.gz"
-                touch "watchtower-client-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz"
-                touch "watchtower-client-${{github.ref_name}}-x86_64-linux-gnu.tar.gz"
+                echo "feojwiefjo" > "watchtower-client-${{github.ref_name}}-aarch64-linux-gnu.tar.gz"
+                echo "feojwiefjo" > "watchtower-client-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz"
+                echo "feojwiefjo" > "watchtower-client-${{github.ref_name}}-x86_64-linux-gnu.tar.gz"
 
             - name: Upload unix artifacts
               uses: actions/upload-artifact@v4
