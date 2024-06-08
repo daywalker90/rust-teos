@@ -1,5 +1,4 @@
 import pytest
-from pyln.client import RpcError
 from conftest import WT_PLUGIN
 
 
@@ -16,7 +15,6 @@ def change_endianness(x):
     return b[::-1].hex()
 
 
-@pytest.mark.developer("Requires dev_sign_last_tx")
 def test_watchtower(node_factory, bitcoind, teosd):
     """
     Test watchtower hook.
@@ -60,7 +58,7 @@ def test_watchtower(node_factory, bitcoind, teosd):
     penalty_txid = bitcoind.rpc.getrawmempool()[0]
 
     # The channel still exists between the two peers, but it's on chain
-    assert l1.rpc.listpeers()["peers"][0]["channels"][0]["state"] == "ONCHAIN"
+    assert l1.rpc.listpeerchannels()["channels"][0]["state"] == "ONCHAIN"
     assert l2.rpc.getappointment(tower_id, locator)["status"] == "dispute_responded"
 
     # Generate blocks until the penalty gets irrevocably resolved
