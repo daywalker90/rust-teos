@@ -2,7 +2,7 @@ from pathlib import Path
 import subprocess
 
 from pyln.testing.fixtures import *  # noqa: F401,F403
-from pyln.testing.utils import DEVELOPER, BITCOIND_CONFIG, TailableProc
+from pyln.testing.utils import BITCOIND_CONFIG, TailableProc
 
 WT_PLUGIN = Path("~/.cargo/bin/watchtower-client").expanduser()
 TEOSD_CONFIG = {
