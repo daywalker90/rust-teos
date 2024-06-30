@@ -10,7 +10,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: ["ubuntu-latest"]
+                os: ["ubuntu-latest", "macos-13"]
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout code
@@ -26,23 +26,66 @@ jobs:
 
             - name: Build unix
               id: unix_build
+              if: contains(matrix.os, 'ubuntu')
               run: |
                 cross build --release --locked --target x86_64-unknown-linux-gnu
                 cross build --release --locked --target armv7-unknown-linux-gnueabihf
                 cross build --release --locked --target aarch64-unknown-linux-gnu
-                tar -czf "teos-${{github.ref_name}}-aarch64-linux-gnu.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/teosd" "target/aarch64-unknown-linux-gnu/release/teos-cli"
-                tar -czf "teos-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/teosd" "target/armv7-unknown-linux-gnueabihf/release/teos-cli"
-                tar -czf "teos-${{github.ref_name}}-x86_64-linux-gnu.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/teosd" "target/x86_64-unknown-linux-gnu/release/teos-cli"
-                tar -czf "watchtower-client-${{github.ref_name}}-aarch64-linux-gnu.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/watchtower-client"
-                tar -czf "watchtower-client-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/watchtower-client"
-                tar -czf "watchtower-client-${{github.ref_name}}-x86_64-linux-gnu.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/watchtower-client"
+
+            - name: Package unix builds
+              if: contains(matrix.os, 'ubuntu')
+              run: |
+                tar -czf "teos-${{github.ref_name}}-aarch64-linux.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/teosd" "target/aarch64-unknown-linux-gnu/release/teos-cli"
+                tar -czf "teos-${{github.ref_name}}-armv7-linux.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/teosd" "target/armv7-unknown-linux-gnueabihf/release/teos-cli"
+                tar -czf "teos-${{github.ref_name}}-x86_64-linux.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/teosd" "target/x86_64-unknown-linux-gnu/release/teos-cli"
+                tar -czf "watchtower-client-${{github.ref_name}}-aarch64-linux.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/watchtower-client"
+                tar -czf "watchtower-client-${{github.ref_name}}-armv7-linux.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/watchtower-client"
+                tar -czf "watchtower-client-${{github.ref_name}}-x86_64-linux.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/watchtower-client"
+
+            - name: Build macos
+              id: macos_build
+              if: contains(matrix.os, 'macos')
+              run: |
+                git clone https://github.com/cross-rs/cross
+                cd cross
+                git submodule update --init --remote
+                export CROSSBUILD_MACOS_SDK="macosx13.1"
+                export SDKROOT=$(xcrun -sdk $CROSSBUILD_MACOS_SDK --show-sdk-path)
+                export MACOSX_DEPLOYMENT_TARGET=12.0
+                cargo build-docker-image x86_64-apple-darwin-cross --tag local
+                cargo build-docker-image aarch64-apple-darwin-cross --tag local
+                cross build --release --locked --target=x86_64-apple-darwin
+                cross build --release --locked --target=aarch64-apple-darwin
+                echo "macos_version=$MACOSX_DEPLOYMENT_TARGET" >> "$GITHUB_OUTPUT"
+                echo $(xcodebuild -showsdks)
+                ls -alh
+
+            - name: Package macos builds
+              if: contains(matrix.os, 'macos')
+              run: |
+                lipo -create -output target/teosd target/aarch64-apple-darwin/release/teosd target/x86_64-apple-darwin/release/teosd
+                lipo -create -output target/teos-cli target/aarch64-apple-darwin/release/teos-cli target/x86_64-apple-darwin/release/teos-cli
+                lipo -create -output target/watchtower-client target/aarch64-apple-darwin/release/watchtower-client target/x86_64-apple-darwin/release/watchtower-client
+                ditto -c -k --sequesterRsrc target/teosd target/teos-cli teos-${{github.ref_name}}-universal-apple-darwin.zip
+                ditto -c -k --sequesterRsrc target/watchtower-client watchtower-client-${{github.ref_name}}-universal-apple-darwin.zip
+                otool -l target/aarch64-apple-darwin/release/${{ github.event.repository.name }} | grep -A 5 LC_BUILD_VERSION
+                otool -l target/x86_64-apple-darwin/release/${{ github.event.repository.name }} | grep -A 5 LC_BUILD_VERSION
 
             - name: Upload unix artifacts
+              if: contains(matrix.os, 'ubuntu')
               uses: actions/upload-artifact@v4
               with:
                 name: unix-binaries
                 path: |
                   *.tar.gz
+
+            - name: Upload macos artifacts
+              if: contains(matrix.os, 'macos')
+              uses: actions/upload-artifact@v4
+              with:
+                name: macos-binaries
+                path: |
+                  *.zip
 
             - name: Get rust version
               id: rversion
@@ -92,6 +135,7 @@ jobs:
                 artifactErrorsFailBuild: true
                 # body: "${{ steps.changelog_reader.outputs.changes }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
                 # body: "${{ steps.get_tag_message.outputs.tag_message }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
-                body: "### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
+                body: "### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31\n- Macos binaries require macos>=12.0"
                 artifacts: |
                   *.tar.gz
+                  *.zip
