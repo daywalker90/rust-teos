@@ -6,12 +6,8 @@ on:
 
 jobs:
     build:
-        name: build release binaries on ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix:
-                os: ["ubuntu-latest"]
-        runs-on: ${{ matrix.os }}
+        name: build release binaries
+        runs-on: "ubuntu-latest"
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -20,9 +16,14 @@ jobs:
               id: rust
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Install cross
+            - name: Install and prepare cross
               run: |
-                cargo install cross --git https://github.com/cross-rs/cross
+                git clone https://github.com/cross-rs/cross
+                cd cross
+                git submodule update --init --remote
+                cargo install cross
+                cargo build-docker-image x86_64-apple-darwin-cross --tag local --build-arg 'MACOS_SDK_URL=https://github.com/alexey-lysiuk/macos-sdk/releases/download/12.3/MacOSX12.3.tar.xz'
+                cargo build-docker-image aarch64-apple-darwin-cross --tag local --build-arg 'MACOS_SDK_URL=https://github.com/alexey-lysiuk/macos-sdk/releases/download/12.3/MacOSX12.3.tar.xz'
 
             - name: Build unix
               id: unix_build
@@ -30,12 +31,28 @@ jobs:
                 cross build --release --locked --target x86_64-unknown-linux-gnu
                 cross build --release --locked --target armv7-unknown-linux-gnueabihf
                 cross build --release --locked --target aarch64-unknown-linux-gnu
-                tar -czf "teos-${{github.ref_name}}-aarch64-linux-gnu.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/teosd" "target/aarch64-unknown-linux-gnu/release/teos-cli"
-                tar -czf "teos-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/teosd" "target/armv7-unknown-linux-gnueabihf/release/teos-cli"
-                tar -czf "teos-${{github.ref_name}}-x86_64-linux-gnu.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/teosd" "target/x86_64-unknown-linux-gnu/release/teos-cli"
-                tar -czf "watchtower-client-${{github.ref_name}}-aarch64-linux-gnu.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/watchtower-client"
-                tar -czf "watchtower-client-${{github.ref_name}}-armv7-linux-gnueabihf.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/watchtower-client"
-                tar -czf "watchtower-client-${{github.ref_name}}-x86_64-linux-gnu.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/watchtower-client"
+
+            - name: Package unix builds
+              run: |
+                tar -czf "teos-${{github.ref_name}}-aarch64-linux.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/teosd" "target/aarch64-unknown-linux-gnu/release/teos-cli"
+                tar -czf "teos-${{github.ref_name}}-armv7-linux.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/teosd" "target/armv7-unknown-linux-gnueabihf/release/teos-cli"
+                tar -czf "teos-${{github.ref_name}}-x86_64-linux.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/teosd" "target/x86_64-unknown-linux-gnu/release/teos-cli"
+                tar -czf "watchtower-client-${{github.ref_name}}-aarch64-linux.tar.gz" --transform 's|.*/||' "target/aarch64-unknown-linux-gnu/release/watchtower-client"
+                tar -czf "watchtower-client-${{github.ref_name}}-armv7-linux.tar.gz" --transform 's|.*/||' "target/armv7-unknown-linux-gnueabihf/release/watchtower-client"
+                tar -czf "watchtower-client-${{github.ref_name}}-x86_64-linux.tar.gz" --transform 's|.*/||' "target/x86_64-unknown-linux-gnu/release/watchtower-client"
+
+            - name: Build macos
+              id: macos_build
+              run: |
+                cross build --release --locked --target=x86_64-apple-darwin
+                cross build --release --locked --target=aarch64-apple-darwin
+
+            - name: Package macos builds
+              run: |
+                zip teos-${{github.ref_name}}-aarch64-macos.zip target/aarch64-apple-darwin/release/teosd target/aarch64-apple-darwin/release/teos-cli
+                zip watchtower-client-${{github.ref_name}}-aarch64-macos.zip target/aarch64-apple-darwin/release/watchtower-client
+                zip teos-${{github.ref_name}}-x86_64-macos.zip target/x86_64-apple-darwin/release/teosd target/x86_64-apple-darwin/release/teos-cli
+                zip watchtower-client-${{github.ref_name}}-x86_64-macos.zip target/x86_64-apple-darwin/release/watchtower-client
 
             - name: Upload unix artifacts
               uses: actions/upload-artifact@v4
@@ -43,6 +60,13 @@ jobs:
                 name: unix-binaries
                 path: |
                   *.tar.gz
+
+            - name: Upload macos artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                name: macos-binaries
+                path: |
+                  *.zip
 
             - name: Get rust version
               id: rversion
@@ -92,6 +116,7 @@ jobs:
                 artifactErrorsFailBuild: true
                 # body: "${{ steps.changelog_reader.outputs.changes }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
                 # body: "${{ steps.get_tag_message.outputs.tag_message }} \n\n### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
-                body: "### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31"
+                body: "### Release binaries info\n\n- Release binaries were built using rust ${{ needs.build.outputs.rust-version }}\n- Linux release binaries require glibc>=2.31\n- Macos binaries require macos>=12.3"
                 artifacts: |
                   *.tar.gz
+                  *.zip
